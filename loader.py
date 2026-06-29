@@ -90,4 +90,5 @@ def load_weights(model, model_dir: str | Path):
         model.tie_weights()
         if getattr(getattr(model, "config", None), "tie_word_embeddings", False):
             missing = [key for key in missing if key != "lm_head.weight"]
+            unexpected = [key for key in unexpected if key != "lm_head.weight"]
     return missing, unexpected

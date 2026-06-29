@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 from utils import build_causal_mask
 from norm import RMSNorm, Qwen35RMSNorm
 from rope import RoPE, Qwen35RotaryEmbedding
@@ -151,12 +152,16 @@ class Qwen35ForCausalLM(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.model = TextModel(config)
-        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        self.model = Qwen35TextModel(config)
+        self.lm_head = (
+            None
+            if getattr(config, "tie_word_embeddings", False)
+            else nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        )
         self.tie_weights()
 
     def tie_weights(self):
-        if getattr(self.config, "tie_word_embeddings", False):
+        if getattr(self.config, "tie_word_embeddings", False) and self.lm_head is not None:
             self.lm_head.weight = self.model.embed_tokens.weight
 
     def forward(
@@ -176,5 +181,8 @@ class Qwen35ForCausalLM(nn.Module):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
         )
-        logits = self.lm_head(hidden_states)
+        if self.lm_head is None:
+            logits = F.linear(hidden_states, self.model.embed_tokens.weight)
+        else:
+            logits = self.lm_head(hidden_states)
         return logits, past_key_values
